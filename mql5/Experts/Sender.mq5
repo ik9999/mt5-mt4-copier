@@ -12,6 +12,7 @@
 
 input string InpFileName = "positions.csv";
 input string InpFilePath = "copier_cache\\";
+input int InpIntervalMs = 100;
 
 class PositionData {
 	public:
@@ -103,11 +104,15 @@ void OnInit(void) {
 	positions_list = new CArrayListClass<PositionData>();
 	refresh_pos_list();
 	write_to_file();
+	EventSetMillisecondTimer(InpIntervalMs);
 }
 //+------------------------------------------------------------------+
 //| Expert tick function                                             |
 //+------------------------------------------------------------------+
 void OnTick(void) {
+}
+
+void OnTimer() {
 	int pos_count = PositionsTotal();
 	bool update_file = false;
 	PositionData *pos_data = NULL;
