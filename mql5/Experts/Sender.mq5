@@ -74,7 +74,6 @@ bool equal_prices(double val1, double val2) {
 
 void refresh_pos_list() {
 	positions_list.clear();
-	selected_position = new CPositionInfo();
 	int pos_count = PositionsTotal();
 	for (int idx = 0; idx < pos_count; idx++) {
 		bool is_selected = selected_position.SelectByIndex(idx);
@@ -102,6 +101,7 @@ void refresh_pos_list() {
 //+------------------------------------------------------------------+
 void OnInit(void) {
 	positions_list = new CArrayListClass<PositionData>();
+	selected_position = new CPositionInfo();
 	refresh_pos_list();
 	write_to_file();
 	EventSetMillisecondTimer(InpIntervalMs);
