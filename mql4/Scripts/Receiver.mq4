@@ -6,6 +6,7 @@
 #property show_inputs
 
 #include "inc/ArrayListClass.mqh"
+#include "inc/HashSet.mqh"
 
 input string InpFileName = "positions.csv";
 input string InpFilePath = "copier_cache\\";
@@ -33,6 +34,7 @@ class PositionData {
 };
 
 CArrayListClass<PositionData> *mt5_positions_list;
+HashSet<string> *closed_orders_comment_set;
 
 bool refresh_mt5_positions() {
 	string file_path = InpFilePath + InpFileName;
@@ -62,6 +64,24 @@ bool refresh_mt5_positions() {
 	}
 }
 
+bool refresh_closed_orders_comments() {
+	Print("Do refresh_closed_orders_comments()");
+	int total = OrdersHistoryTotal();
+	int iter_start = total - 20;
+	if (iter_start < 0) {
+		iter_start = 0;
+	}
+	closed_orders_comment_set.clear();
+	for (int i = 0; i < total; i++) {
+		if (OrderSelect(i, SELECT_BY_POS, MODE_HISTORY) == false) {
+			PrintFormat("Error refresh_closed_orders_comments: Cant select order by pos %d", i);
+			return false;
+		}
+		closed_orders_comment_set.add(OrderComment());
+	}
+	return true;
+}
+
 bool valid_price(double value) {
 	return value > 0.0000001 && value != EMPTY_VALUE;
 }
@@ -78,7 +98,7 @@ bool equal_prices(double val1, double val2) {
 }
 
 int digits(string symbol) {
-	return MarketInfo(symbol, MODE_DIGITS);
+	return (int)MarketInfo(symbol, MODE_DIGITS);
 }
 
 double price_close(string symbol,int cmd) {
@@ -112,8 +132,8 @@ bool update_orders() {
 		if (str_parts_num != 2) {
 			continue;
 		}
-		long pos_id = IntegerToString(str_parts[0]);
-		long open_time_ts = IntegerToString(str_parts[1]);
+		long pos_id = StringToInteger(str_parts[0]);
+		long open_time_ts = StringToInteger(str_parts[1]);
 
 		bool order_found = false;
 		for (pos_idx = 0; pos_idx < mt5_positions_list.size(); pos_idx++) {
@@ -125,7 +145,7 @@ bool update_orders() {
 		}
 		if (!order_found) {
 			PrintFormat("Order %s not in file. Close it.", comment);
-			bool closing_res = OrderClose(OrderTicket(), OrderLots(), price_close(OrderSymbol(), OrderType()), MarketInfo(OrderSymbol(), MODE_SPREAD));
+			bool closing_res = OrderClose(OrderTicket(), OrderLots(), price_close(OrderSymbol(), OrderType()), (int)MarketInfo(OrderSymbol(), MODE_SPREAD));
 			if (!closing_res) {
 				PrintFormat("Error closing order %s. Error: %d", comment, GetLastError());
 				return false;
@@ -169,8 +189,8 @@ bool update_orders() {
 				if (_str_parts_num != 2) {
 					continue;
 				}
-				long _pos_id = IntegerToString(str_parts[0]);
-				long _open_time_ts = IntegerToString(str_parts[1]);
+				long _pos_id = StringToInteger(str_parts[0]);
+				long _open_time_ts = StringToInteger(str_parts[1]);
 				if ((pos_data.id == _pos_id) && (pos_data.open_time_ts == _open_time_ts)) {
 					match_found = true;
 					break;
@@ -198,10 +218,16 @@ bool update_orders() {
 				tp_price = NormalizeDouble(pos_data.tp_price, digits(pos_data.symbol));
 			}
 			string _comment = StringFormat("%d:%d", pos_data.id, pos_data.open_time_ts);
-			bool order_send_res = OrderSend(pos_data.symbol, cmd, NormalizeDouble(pos_data.volume, 2), price, MarketInfo(pos_data.symbol, MODE_SPREAD), sl_price, tp_price, _comment);
-			if (!order_send_res) {
-				PrintFormat("Error OrderSend. Order: %s. Error: %d", _comment, GetLastError());
-				return false;
+			if (!closed_orders_comment_set.contains(_comment)) {
+				bool order_send_res = OrderSend(
+					pos_data.symbol, cmd, NormalizeDouble(pos_data.volume, 2), price, (int)MarketInfo(pos_data.symbol, MODE_SPREAD), sl_price, tp_price, _comment
+				);
+				if (!order_send_res) {
+					PrintFormat("Error OrderSend. Order: %s. Error: %d", _comment, GetLastError());
+					return false;
+				}
+			} else {
+				PrintFormat("Order %s in closed_orders_comment_set. Dont open.", _comment);
 			}
 		}
 	}
@@ -210,8 +236,20 @@ bool update_orders() {
 
 int start() {
 	mt5_positions_list = new CArrayListClass<PositionData>();
+	closed_orders_comment_set = new HashSet<string>();
 	Print("Started Receiver");
+	int prev_orders_total = OrdersTotal();
+	refresh_closed_orders_comments();
 	while(!IsStopped()) {
+		if (prev_orders_total != OrdersTotal()) {
+			bool res = refresh_closed_orders_comments();
+			if (!res) {
+				Print("refresh_closed_orders_comments error. Will try again after sleep.");
+				Sleep(InpSleepIntervalMsc);
+				continue;
+			}
+			prev_orders_total = OrdersTotal();
+		}
 		bool refresh_res = refresh_mt5_positions();
 		if (refresh_res) {
 			bool update_orders_res = update_orders();
@@ -221,7 +259,7 @@ int start() {
 		} else {
 			Print("refresh_mt5_positions() error");
 		}
-		PrintFormat("Number of positions: %d", mt5_positions_list.size());
+		//PrintFormat("Number of positions: %d", mt5_positions_list.size());
 		uint start_time = GetTickCount();
 		uint end_time = GetTickCount();
 		if (end_time - start_time >= InpSleepIntervalMsc) {
