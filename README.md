@@ -25,7 +25,9 @@ First add Sender EA to MT5 terminal, then Receiver Script to MT4 terminal.
 Whats supported:
 
 Opening new orders
+
 Closing closed orders
+
 Editing TP/SL
 
 Whats no supported:
