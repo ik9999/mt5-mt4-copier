@@ -22,7 +22,7 @@ drwxr-xr-x  2 eq eq 4.0K Feb 12 19:45 copier_cache
 
 First add Sender EA to MT5 terminal, then Receiver Script to MT4 terminal.
 
-Whats supported:
+**Whats supported**:
 
 Opening new orders
 
@@ -30,6 +30,6 @@ Closing closed orders
 
 Editing TP/SL
 
-Whats no supported:
+**Whats not supported**:
 
 Partial closing
